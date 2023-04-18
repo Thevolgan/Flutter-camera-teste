@@ -1,3 +1,5 @@
+// ignore_for_file: library_private_types_in_public_api
+
 import 'dart:io';
 import 'dart:ui';
 
@@ -5,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:camera_camera/camera_camera.dart';
 import 'package:flutter_application_1/preview_pade.dart';
 import 'package:flutter_application_1/widget/anexo.dart';
+import 'package:google_ml_kit/google_ml_kit.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:get/get.dart';
 
@@ -15,74 +18,159 @@ class HomePage extends StatefulWidget {
   _HomePageState createState() => _HomePageState();
 }
 
+
 class _HomePageState extends State<HomePage> {
-  File? arquivo;
-  final picker = ImagePicker();
+  bool textScanning = false;
 
-  Future getFileFromGallery() async {
-    PickedFile? file = await picker.getImage(source: ImageSource.gallery);
+  XFile? imageFile;
 
-    if (file != null) {
-      setState(() => arquivo = File(file.path));
-    }
-  }
-
-  showPreview(file) async {
-    File? arq = await Get.to(() => PreviewPage(file: file));
-
-    if (arq != null) {
-      setState(() => arquivo = arq);
-      Get.back();
-    }
-  }
+  String scannedText = "";
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Câmera teste - Projex',
-        textAlign: TextAlign.center,
-        
-        ),
+        centerTitle: true,
+        title: const Text("Text Recognition example"),
       ),
       body: Center(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (arquivo != null) Anexo(arquivo: arquivo!),
-                ElevatedButton.icon(
-                  onPressed: () => Get.to(
-                    () => CameraCamera(onFile: (file) => showPreview(file)),
-                  ),
-                  icon: Icon(Icons.camera_alt),
-                  label: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text('Tirar foto'),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                      elevation: 0.0,
-                      textStyle: TextStyle(
-                        fontSize: 18,
-                      )),
-                ),
-                /*Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Text('ou'),
-                ),
-                OutlinedButton.icon(
-                  icon: Icon(Icons.attach_file),
-                  label: Text('Selecione um arquivo'),
-                  onPressed: () => getFileFromGallery(),
-                ),*/
-              ],
-            ),
-          ],
-        ),
-      ),
+          child: SingleChildScrollView(
+            child: Container(
+                margin: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (textScanning) const CircularProgressIndicator(),
+                    if (!textScanning && imageFile == null)
+                      Container(
+                        width: 300,
+                        height: 300,
+                        color: Colors.grey[300]!,
+                      ),
+                    if (imageFile != null) Image.file(File(imageFile!.path)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 5),
+                            padding: const EdgeInsets.only(top: 10),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                primary: Colors.white,
+                                onPrimary: Colors.grey,
+                                shadowColor: Colors.grey[400],
+                                elevation: 10,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.0)),
+                              ),
+                              onPressed: () {
+                                getImage(ImageSource.gallery);
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                    vertical: 5, horizontal: 5),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.image,
+                                      size: 30,
+                                    ),
+                                    Text(
+                                      "Gallery",
+                                      style: TextStyle(
+                                          fontSize: 13, color: Colors.grey[600]),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            )),
+                        Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 5),
+                            padding: const EdgeInsets.only(top: 10),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                primary: Colors.white,
+                                onPrimary: Colors.grey,
+                                shadowColor: Colors.grey[400],
+                                elevation: 10,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8.0)),
+                              ),
+                              onPressed: () {
+                                getImage(ImageSource.camera);
+                              },
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(
+                                    vertical: 5, horizontal: 5),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.camera_alt,
+                                      size: 30,
+                                    ),
+                                    Text(
+                                      "Camera",
+                                      style: TextStyle(
+                                          fontSize: 13, color: Colors.grey[600]),
+                                    )
+                                  ],
+                                ),
+                              ),
+                            )),
+                      ],
+                    ),
+                    const SizedBox(
+                      height: 20,
+                    ),
+                    Container(
+                      child: Text(
+                        scannedText,
+                        style: TextStyle(fontSize: 20),
+                      ),
+                    )
+                  ],
+                )),
+          )),
     );
   }
+
+  void getImage(ImageSource source) async {
+    try {
+      final pickedImage = await ImagePicker().pickImage(source: source);
+      if (pickedImage != null) {
+        textScanning = true;
+        imageFile = pickedImage;
+        setState(() {});
+        getRecognisedText(pickedImage);
+      }
+    } catch (e) {
+      textScanning = false;
+      imageFile = null;
+      scannedText = "Error occured while scanning";
+      setState(() {});
+    }
+  }
+
+  void getRecognisedText(XFile image) async {
+    final inputImage = InputImage.fromFilePath(image.path);
+    final textDetector = GoogleMlKit.vision.textRecognizer();
+    RecognizedText recognisedText = await textDetector.processImage(inputImage);
+    await textDetector.close();
+    scannedText = "";
+    for (TextBlock block in recognisedText.blocks) {
+      for (TextLine line in block.lines) {
+        scannedText = scannedText + line.text + "\n";
+      }
+    }
+    textScanning = false;
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
 }
+
